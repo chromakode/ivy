@@ -7,8 +7,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"regexp"
-	"strings"
 	"time"
 )
 
@@ -37,22 +35,7 @@ type connection struct {
 	send          chan []byte
 }
 
-var validPath = regexp.MustCompile(`^/[0-9a-z-./]+$`)
 
-func normalizePath(path string) string {
-	path = strings.TrimSpace(path)
-
-	// trim trailing /
-	if path[len(path)-1] == '/' {
-		path = path[:len(path)-2]
-	}
-
-	// check for invalid characters
-	if !validPath.MatchString(path) {
-		return ""
-	}
-
-	return path
 }
 
 func dropLast(bytes []byte) []byte {
