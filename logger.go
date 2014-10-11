@@ -52,7 +52,7 @@ func (logger *logger) write(entry logEntry) {
 
 var invalidGlob = regexp.MustCompile(`\*\*|\w\*|\*\w|\/$`)
 
-func (logger *logger) readGlobbedLog(globbedPath string, lineCount int) (reader io.ReadSeeker, maxModTime time.Time, err error) {
+func (logger *logger) readGlobbedLog(globbedPath string, lineCount int, startTime string, endTime string) (reader io.ReadSeeker, maxModTime time.Time, err error) {
 	var lines [][]byte
 
 	if invalidGlob.MatchString(globbedPath) {
@@ -64,14 +64,17 @@ func (logger *logger) readGlobbedLog(globbedPath string, lineCount int) (reader 
 
 	globParts := bytes.Split([]byte(globbedPath), []byte{'*'})
 
+	startTimeKey := []byte("@" + startTime)
+	endTimeKey := []byte("@" + endTime + "@") // @ is lexographically after <number>
+
 	var recurse func([]byte, int) (time.Time, error)
 	recurse = func(basePath []byte, pathIdx int) (maxModTime time.Time, err error) {
 		// keys are of the format /path/path/path@timestamp
 		if pathIdx == len(globParts) {
 			// path matches glob; collect the lines backwards from path@@ to path@
-			firstKey := append(basePath, '@')
+			firstKey := append(basePath, startTimeKey...)
 			startKey := firstKey
-			endKey := append(basePath, '@', '@') // @@ is lexographically after @<number>
+			endKey := append(basePath, endTimeKey...)
 
 			// step back from the end lineCount lines
 			if lineCount > 0 {

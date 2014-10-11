@@ -46,9 +46,13 @@ func (ivy *Ivy) serveLog(w http.ResponseWriter, r *http.Request) {
 		lines = 0
 	}
 
+	at := r.FormValue("at")
+	startTime := at
+	endTime := at
+
 	path := r.URL.Path
 
-	logReader, modTime, err := ivy.logger.readGlobbedLog("/"+path, lines)
+	logReader, modTime, err := ivy.logger.readGlobbedLog("/"+path, lines, startTime, endTime)
 	if os.IsNotExist(err) {
 		http.Error(w, "Not Found", 404)
 		return
