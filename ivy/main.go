@@ -23,7 +23,10 @@ func main() {
 		log.Fatalf("logdir %#v must be a directory", *logDir)
 	}
 
-	ivy := ivy.NewIvy(*logDir)
+	ivy := ivy.NewIvy(ivy.IvyConfig{
+		LogDir: *logDir,
+		LargeChunkSize: 64 * 1024,
+	})
 	ivy.Start()
 	if err := http.ListenAndServe(*addr, ivy); err != nil {
 		log.Fatal("ListenAndServe: ", err)

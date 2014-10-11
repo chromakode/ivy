@@ -9,16 +9,18 @@ import (
 type connectionMap map[*connection]bool
 
 type bus struct {
-	tree    map[string]connectionMap
-	control chan actionHandler
-	logger  *logger
+	tree           map[string]connectionMap
+	control        chan actionHandler
+	logger         *logger
+	largeChunkSize int
 }
 
-func newBus(logger *logger) *bus {
+func newBus(logger *logger, largeChunkSize int) *bus {
 	return &bus{
-		tree:    make(map[string]connectionMap),
-		control: make(chan actionHandler),
-		logger:  logger,
+		tree:           make(map[string]connectionMap),
+		control:        make(chan actionHandler),
+		logger:         logger,
+		largeChunkSize: largeChunkSize,
 	}
 }
 
@@ -57,7 +59,7 @@ func (unsub unsubscribeAction) handle(bus *bus) {
 type eventAction struct {
 	timestamp time.Time
 	path      string
-	conn      *connection
+	conn_id   string
 	data      []byte
 }
 
@@ -66,6 +68,10 @@ func formatEvent(ev eventAction) string {
 	data := strings.Replace(string(ev.data), "%", "%25", -1)
 	data = strings.Replace(data, "\n", "%0A", -1)
 	return fmt.Sprintf("%s:%s:%s", timeString(ev.timestamp), ev.path, data)
+}
+
+func formatLargeEvent(ev eventAction) string {
+	return fmt.Sprintf("%s:%s.", timeString(ev.timestamp), ev.path)
 }
 
 func (ev eventAction) handle(bus *bus) {
@@ -77,9 +83,13 @@ func (ev eventAction) handle(bus *bus) {
 		line:      eventLine,
 	}
 
+	if len(ev.data) >= bus.largeChunkSize {
+		eventLine = formatLargeEvent(ev)
+	}
+
 	broadcast := func(path string) {
 		for c := range bus.tree[path] {
-			if c == ev.conn {
+			if c.id == ev.conn_id {
 				continue
 			}
 

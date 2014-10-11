@@ -29,13 +29,19 @@ var upgrader = websocket.Upgrader{
 }
 
 type connection struct {
+	id            string
 	bus           *bus
 	ws            *websocket.Conn
 	subscriptions map[string]bool
 	send          chan []byte
 }
 
+func (c *connection) intro() {
+	timestamp := time.Now().UTC()
 
+	msgBuf := new(bytes.Buffer)
+	fmt.Fprintf(msgBuf, "%s:~/sid:%s", timeString(timestamp), c.id)
+	c.send <- msgBuf.Bytes()
 }
 
 func dropLast(bytes []byte) []byte {
@@ -118,7 +124,7 @@ ReadLoop:
 				break ReadLoop
 			}
 
-			c.bus.control <- eventAction{timestamp, path, c, message.Bytes()}
+			c.bus.control <- eventAction{timestamp, path, c.id, message.Bytes()}
 		case '@':
 			// FIXME: investigate GC pauses (thanks intortus!)
 			resp := new(bytes.Buffer)
@@ -192,11 +198,14 @@ func connectWs(b *bus, w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := &connection{
+		id:            randomId(),
 		bus:           b,
 		ws:            ws,
 		subscriptions: make(map[string]bool),
 		send:          make(chan []byte, 256),
 	}
+
+	c.intro()
 	go c.writePump()
 	c.readPump()
 }

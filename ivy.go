@@ -4,32 +4,61 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Ivy struct {
 	http.ServeMux
 	bus    *bus
 	logger *logger
+	config IvyConfig
 }
 
-func NewIvy(logDir string) *Ivy {
-	logger, err := newLogger(logDir)
+type IvyConfig struct {
+	LogDir         string
+	LargeChunkSize int
+}
+
+func NewIvy(config IvyConfig) *Ivy {
+	logger, err := newLogger(config.LogDir)
 	if err != nil {
 		panic(err)
 	}
 
 	ivy := &Ivy{
 		ServeMux: *http.NewServeMux(),
-		bus:      newBus(logger),
+		bus:      newBus(logger, config.LargeChunkSize),
 		logger:   logger,
+		config:   config,
 	}
 	ivy.HandleFunc("/ws", ivy.serveWs)
-	ivy.Handle("/log/", http.StripPrefix("/log/", http.HandlerFunc(ivy.serveLog)))
+	ivy.Handle("/events/", http.StripPrefix("/events/", http.HandlerFunc(ivy.serveEvents)))
 	return ivy
 }
 
 func (ivy *Ivy) serveWs(w http.ResponseWriter, r *http.Request) {
 	connectWs(ivy.bus, w, r)
+}
+
+func (ivy *Ivy) serveEvents(w http.ResponseWriter, r *http.Request) {
+	if r.Method == "POST" {
+		ivy.serveNewEvent(w, r)
+	} else if r.Method == "GET" {
+		ivy.serveLog(w, r)
+	} else {
+		http.Error(w, "Not Found", 404)
+	}
+}
+
+func (ivy *Ivy) serveNewEvent(w http.ResponseWriter, r *http.Request) {
+	data := r.FormValue("data")
+	sid := r.FormValue("sid")
+	ivy.bus.control <- eventAction{
+		timestamp: time.Now().UTC(),
+		path:      normalizePath(r.URL.Path),
+		conn_id:   sid,
+		data:      []byte(data),
+	}
 }
 
 func (ivy *Ivy) serveLog(w http.ResponseWriter, r *http.Request) {
